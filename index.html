@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>庫存管理</title>
+<style>
+:root{--bg:#f3f4f6;--card:#fff;--text:#1f2937;--muted:#6b7280;--line:#e5e7eb;--out:#dc2626;--warn:#d97706;--in:#16a34a;--accent:#4f46e5}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111827;--card:#1f2937;--text:#f3f4f6;--muted:#9ca3af;--line:#374151;--out:#f87171;--warn:#fbbf24;--in:#4ade80;--accent:#818cf8}}
+:root[data-theme="dark"]{--bg:#111827;--card:#1f2937;--text:#f3f4f6;--muted:#9ca3af;--line:#374151;--out:#f87171;--warn:#fbbf24;--in:#4ade80;--accent:#818cf8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;line-height:1.5}
+header{position:sticky;top:0;z-index:5;background:var(--accent);color:var(--card);padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px}
+header div{max-width:560px;margin:0 auto}
+h1{font-size:18px;margin:0}
+main{max-width:560px;margin:0 auto;padding:14px 14px 100px}
+h2{font-size:15px;margin:0 0 4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.hd{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.sum b{display:block;font-size:26px;line-height:1.2}
+.sum small,.sub,.tip{color:var(--muted);font-size:12px}
+.sub{display:block}
+.tip{margin:4px 0 0}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 10px;margin-top:8px;border-left:4px solid var(--c,var(--line));border-radius:8px;background:var(--bg)}
+.grow{flex:1;min-width:0;word-break:break-all}
+.rt{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.s-out{--c:var(--out)}.s-warn{--c:var(--warn)}.s-ok{--c:var(--in)}
+.s-out .qty{color:var(--out)}.s-warn .qty{color:var(--warn)}
+.qty{font-weight:700}
+.pill{font-size:11px;padding:1px 8px;border-radius:99px;background:var(--c,var(--muted));color:var(--card)}
+textarea,input{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--bg);color:var(--text);font:inherit;font-size:16px}
+textarea{min-height:110px;resize:vertical}
+input:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.w{grid-column:1/-1}
+.btns{display:flex;gap:8px;margin-top:10px}
+.btns button{flex:1}
+button{font:inherit;border:0;border-radius:10px;padding:11px 14px;background:var(--accent);color:var(--card);cursor:pointer;touch-action:manipulation}
+button.g{background:transparent;color:var(--muted);border:1px solid var(--line)}
+button.d{background:transparent;color:var(--out);border:1px solid var(--line)}
+button:disabled{opacity:.4;cursor:default}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chips button{padding:6px 12px;font-size:14px;background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:99px}
+.msg{font-size:13px;color:var(--muted);margin-top:8px;white-space:pre-line}
+.msg.bad{color:var(--out)}
+.src{font-size:13px;color:var(--accent);margin:8px 0 0}
+.empty{color:var(--muted);font-size:14px;text-align:center;padding:12px 0}
+.x{background:none;color:var(--muted);padding:2px 8px;font-size:18px}
+.click{cursor:pointer}
+.ttl{font-weight:700;border:0;background:transparent;padding:4px 0}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);z-index:6}
+nav div{max-width:560px;margin:0 auto;display:flex}
+nav button{flex:1;background:none;color:var(--muted);border-radius:0;padding:10px 2px;font-size:12px;display:flex;flex-direction:column;align-items:center}
+nav button span{font-size:19px;line-height:1.2}
+nav button.on{color:var(--accent);font-weight:700}
+#toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--text);color:var(--bg);padding:9px 16px;border-radius:99px;font-size:14px;z-index:9;max-width:90%;text-align:center}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header><div><h1>📦 庫存管理</h1></div></header>
+<main>
+<section id="p1">
+  <div class="card"><div class="sum"><div><b id="cOut" style="color:var(--out)">0</b><small>需補貨</small></div><div><b id="cWarn" style="color:var(--warn)">0</b><small>偏低</small></div><div><b id="cOk" style="color:var(--in)">0</b><small>充足</small></div></div></div>
+  <div class="card"><h2>單品庫存</h2><div id="ovItems"></div></div>
+  <div class="card"><h2>組合可做份數</h2><div id="ovCombos"></div></div>
+  <div class="card"><h2>補貨缺口</h2><span class="sub">只是清單，不會改動庫存</span><div id="ovGap"></div><div class="btns"><button id="mkList" hidden>存成購物清單</button></div></div>
+</section>
+
+<section id="p2" hidden>
+  <div class="card">
+    <h2>調整庫存</h2>
+    <p class="tip">一行一筆：<code>雞蛋:+5</code> 進貨　<code>火腿:-2</code> 出貨</p>
+    <div class="src" id="srcBar" hidden></div>
+    <textarea id="adj" style="margin-top:8px" placeholder="雞蛋:+5&#10;火腿:-2"></textarea>
+    <div class="msg" id="adjMsg"></div>
+    <div class="chips" id="chips"></div>
+  </div>
+  <div class="card"><h2>預覽</h2><div id="adjPrev"></div></div>
+  <div class="btns"><button class="g" id="adjClr">清除</button><button id="adjOk" disabled>確認調整</button></div>
+</section>
+
+<section id="p3" hidden>
+  <div class="card">
+    <h2>單品</h2><span class="sub">同名會更新設定，庫存不變</span>
+    <div class="g2"><input class="w" id="iN" placeholder="品項名" maxlength="20"><input id="iU" placeholder="單位" maxlength="6"><span></span><input id="iI" inputmode="decimal" placeholder="理想庫存"><input id="iM" inputmode="decimal" placeholder="最低限"></div>
+    <div class="msg bad" id="iMsg"></div>
+    <div class="btns"><button class="g" id="iClr">清除</button><button id="iSave">儲存單品</button></div>
+    <div id="iList"></div>
+  </div>
+  <div class="card">
+    <h2>組合</h2>
+    <input id="cN" style="margin-top:8px" placeholder="組合名" maxlength="20">
+    <div class="g2"><input id="cI" inputmode="decimal" placeholder="理想預留份數"><input id="cM" inputmode="decimal" placeholder="最低預留份數"></div>
+    <p class="tip">每份用量（0＝不含）</p><div id="ingBox"></div>
+    <div class="msg bad" id="cMsg"></div>
+    <div class="btns"><button class="g" id="cClr">清除</button><button id="cSave">儲存組合</button></div>
+    <div id="cList"></div>
+  </div>
+  <div class="card">
+    <h2>資料備份</h2><span class="sub">資料只存在這支手機，建議定期匯出</span>
+    <div class="btns"><button class="g" id="bkOut">匯出備份</button><button class="g" id="bkIn">匯入備份</button></div>
+    <input type="file" id="bkFile" accept=".json,application/json" hidden>
+  </div>
+</section>
+
+<section id="p4" hidden>
+  <p class="tip" style="margin:0 0 10px">清單不影響庫存，進貨入庫後須在調整頁確認。</p>
+  <div id="listBox"></div>
+  <div class="btns"><button class="g" id="newList">＋ 新增清單</button></div>
+</section>
+</main>
+
+<nav><div>
+  <button id="n1" class="on"><span>📊</span>總覽</button>
+  <button id="n2"><span>✏️</span>調整</button>
+  <button id="n3"><span>⚙️</span>設定</button>
+  <button id="n4"><span>🧾</span><i style="font-style:normal" id="n4t">清單</i></button>
+</div></nav>
+<div id="toast" hidden></div>
+
+<script>
+var NUMS = /^[+-]?\d+(\.\d+)?$/, POS = /^\d+(\.\d+)?$/;
+function ld(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v || d; } catch (e) { return d; } }
+var items = ld("mvp_items", { "火腿": { stock: 10, unit: "片", ideal: 15, min: 3 }, "培根": { stock: 10, unit: "片", ideal: 15, min: 3 }, "雞蛋": { stock: 10, unit: "顆", ideal: 20, min: 6 } });
+var combos = ld("mvp_combos", { "培根蛋": { ingredients: { "培根": 1, "雞蛋": 1 }, ideal: 5, min: 3 }, "火腿蛋": { ingredients: { "火腿": 1, "雞蛋": 1 }, ideal: 5, min: 3 } });
+var lists = ld("mvp_lists", []);
+var pending = null, tt, curP = 1;
+var $ = function (id) { return document.getElementById(id); };
+function r2(n) { return Math.round(n * 100) / 100; }
+function fmt(n) { return r2(n).toLocaleString("zh-TW"); }
+function sg(n) { return (n > 0 ? "+" : "") + fmt(n); }
+function pad(n) { return n < 10 ? "0" + n : "" + n; }
+function uid() { return Date.now() + "" + Math.floor(Math.random() * 1000); }
+function h(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+function saveData() {
+  try { localStorage.setItem("mvp_items", JSON.stringify(items)); localStorage.setItem("mvp_combos", JSON.stringify(combos)); localStorage.setItem("mvp_lists", JSON.stringify(lists)); return true; }
+  catch (e) { toast("無法儲存，資料重新整理後會消失"); return false; }
+}
+function toast(m) { var t = $("toast"); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(function () { t.hidden = true; }, 2200); }
+
+// ---- 核心計算：各組合需求加總，與單品自身設定取較大者 ----
+function needs() {
+  var mn = {}, id = {}, sm = {}, si = {}, n, c, g, cb;
+  for (c in combos) {
+    cb = combos[c];
+    for (g in cb.ingredients) {
+      sm[g] = (sm[g] || 0) + cb.ingredients[g] * cb.min;
+      si[g] = (si[g] || 0) + cb.ingredients[g] * cb.ideal;
+    }
+  }
+  for (n in items) {
+    mn[n] = Math.max(items[n].min, sm[n] || 0);
+    id[n] = Math.max(items[n].ideal, si[n] || 0, mn[n]);
+  }
+  return { min: mn, ideal: id };
+}
+function status(n, nd) {
+  var s = items[n].stock;
+  if (s <= 0) return ["無庫存", "out", 0];
+  if (s < nd.min[n]) return ["不足", "out", 1];
+  if (s < nd.ideal[n]) return ["偏低", "warn", 2];
+  return ["充足", "ok", 3];
+}
+function canMake(cb) {
+  var m = Infinity, lim = "", g, p;
+  for (g in cb.ingredients) { p = items[g] ? Math.floor(items[g].stock / cb.ingredients[g]) : 0; if (p < m) { m = p; lim = g; } }
+  return { n: m === Infinity ? 0 : Math.max(m, 0), lim: lim };
+}
+
+// ---- 總覽 ----
+function renderOverview() {
+  var nd = needs(), cnt = { out: 0, warn: 0, ok: 0 }, names = Object.keys(items), gap = [];
+  names.sort(function (a, b) { return status(a, nd)[2] - status(b, nd)[2]; });
+  var box = $("ovItems"); box.innerHTML = "";
+  names.forEach(function (n) {
+    var it = items[n], st = status(n, nd), d = h("div", "row s-" + st[1]), l = h("div", "grow"), r = h("div", "rt");
+    cnt[st[1]]++;
+    if (it.stock < nd.ideal[n]) gap.push({ name: n, q: r2(nd.ideal[n] - it.stock), unit: it.unit, have: it.stock, goal: nd.ideal[n] });
+    l.appendChild(h("b", null, n)); l.appendChild(h("small", "sub", "安全 " + fmt(nd.min[n]) + "・目標 " + fmt(nd.ideal[n]) + " " + it.unit));
+    r.appendChild(h("span", "qty", fmt(it.stock) + " " + it.unit)); r.appendChild(h("span", "pill", st[0]));
+    d.appendChild(l); d.appendChild(r); box.appendChild(d);
+  });
+  if (!names.length) box.appendChild(h("div", "empty", "尚無單品，請到「設定」新增"));
+  $("cOut").textContent = cnt.out; $("cWarn").textContent = cnt.warn; $("cOk").textContent = cnt.ok;
+
+  var cb = $("ovCombos"); cb.innerHTML = "";
+  Object.keys(combos).forEach(function (c) {
+    var co = combos[c], m = canMake(co), k = m.n < co.min ? "out" : (m.n < co.ideal ? "warn" : "ok");
+    var d = h("div", "row s-" + k), l = h("div", "grow"), r = h("div", "rt");
+    l.appendChild(h("b", null, c));
+    l.appendChild(h("small", "sub", "最低 " + co.min + "・理想 " + co.ideal + (k !== "ok" && m.lim ? "・卡在" + m.lim : "")));
+    r.appendChild(h("span", "qty", m.n + " 份")); d.appendChild(l); d.appendChild(r); cb.appendChild(d);
+  });
+  if (!cb.firstChild) cb.appendChild(h("div", "empty", "尚無組合"));
+
+  var gb = $("ovGap"); gb.innerHTML = "";
+  gap.forEach(function (g) {
+    var d = h("div", "row"), l = h("div", "grow"), r = h("div", "rt");
+    l.appendChild(h("b", null, g.name)); l.appendChild(h("small", "sub", fmt(g.have) + " → " + fmt(g.goal)));
+    r.appendChild(h("span", "qty", "缺 " + fmt(g.q) + " " + g.unit)); d.appendChild(l); d.appendChild(r); gb.appendChild(d);
+  });
+  if (!gap.length) gb.appendChild(h("div", "empty", "都已達標，不需補貨"));
+  var mk = $("mkList"); mk.hidden = !gap.length;
+  mk.onclick = function () {
+    var t = new Date();
+    lists.unshift({ id: uid(), title: "補貨 " + (t.getMonth() + 1) + "/" + t.getDate(), text: gap.map(function (g) { return g.name + ":" + g.q; }).join("\n"), done: false });
+    if (saveData()) toast("已存成購物清單");
+    badge();
+  };
+}
+
+// ---- 調整頁：逐行解析 + 即時預覽 ----
+function parseAdj(text) {
+  var lines = text.replace(/\uFF1A/g, ":").split(/\r?\n/), work = {}, errs = [], touched = [], rows = [], n;
+  for (n in items) work[n] = items[n].stock;
+  lines.forEach(function (raw, i) {
+    var line = raw.trim(); if (!line) return;
+    var p = line.lastIndexOf(":"), nm = p < 0 ? "" : line.slice(0, p).trim(), num = p < 0 ? "" : line.slice(p + 1).trim().replace(/,/g, "");
+    if (!nm || !NUMS.test(num)) { errs.push("第 " + (i + 1) + " 行格式錯誤，已略過：" + line); return; }
+    if (!items[nm]) { errs.push("第 " + (i + 1) + " 行找不到「" + nm + "」，已略過"); return; }
+    work[nm] = r2(work[nm] + parseFloat(num)); if (touched.indexOf(nm) < 0) touched.push(nm);
+  });
+  touched.forEach(function (n) { var d = r2(work[n] - items[n].stock); if (d !== 0) rows.push({ name: n, d: d, from: items[n].stock, to: work[n] }); });
+  return { rows: rows, errs: errs };
+}
+var cur = { rows: [], errs: [] };
+function calcAdj() {
+  cur = parseAdj($("adj").value);
+  var pv = $("adjPrev"), neg = [];
+  pv.innerHTML = "";
+  cur.rows.forEach(function (x) {
+    var k = x.to < 0 ? "out" : (x.d < 0 ? "warn" : "ok"), d = h("div", "row s-" + k), l = h("div", "grow"), r = h("div", "rt");
+    l.appendChild(h("b", null, x.name)); l.appendChild(h("small", "sub", fmt(x.from) + " → " + fmt(x.to) + " " + items[x.name].unit));
+    r.appendChild(h("span", "qty", sg(x.d))); d.appendChild(l); d.appendChild(r); pv.appendChild(d);
+    if (x.to < 0) neg.push("「" + x.name + "」會變成 " + fmt(x.to));
+  });
+  if (!cur.rows.length) pv.appendChild(h("div", "empty", "尚無內容"));
+  var m = $("adjMsg"); m.textContent = cur.errs.concat(neg).join("\n"); m.className = "msg" + (m.textContent ? " bad" : "");
+  $("adjOk").disabled = !cur.rows.length;
+  var sb = $("srcBar"); sb.hidden = !pending;
+  if (pending) { var l = lists.filter(function (k) { return k.id === pending; })[0]; sb.textContent = "來自「" + (l ? l.title : "") + "」，確認後標為已進貨"; }
+}
+function renderChips() {
+  var c = $("chips"); c.innerHTML = "";
+  Object.keys(combos).forEach(function (k) {
+    var b = h("button", null, k + " −1");
+    b.addEventListener("click", function () {
+      var cb = combos[k], t = Object.keys(cb.ingredients).map(function (g) { return g + ":-" + cb.ingredients[g]; }).join("\n"), a = $("adj");
+      a.value = a.value.trim() ? a.value.replace(/\s+$/, "") + "\n" + t : t; calcAdj();
+    });
+    c.appendChild(b);
+  });
+}
+function clearAdj() { $("adj").value = ""; pending = null; calcAdj(); }
+$("adj").oninput = calcAdj;
+$("adjClr").onclick = clearAdj;
+$("adjOk").onclick = function () {
+  if (!cur.rows.length) return;
+  var neg = cur.rows.filter(function (x) { return x.to < 0; });
+  if (neg.length && !confirm("會變成負數：" + neg.map(function (x) { return x.name; }).join("、") + "\n仍要套用？")) return;
+  cur.rows.forEach(function (x) { items[x.name].stock = x.to; });
+  if (pending) lists.forEach(function (l) { if (l.id === pending) l.done = true; });
+  var n = cur.rows.length;
+  clearAdj(); saveData(); badge(); toast("已調整 " + n + " 項");
+};
+
+// ---- 設定頁 ----
+function readNum(id, def, errs, label) {
+  var v = $(id).value.trim().replace(/,/g, "");
+  if (!v) return def;
+  if (!POS.test(v)) { errs.push(label + "請輸入數字"); return def; }
+  return parseFloat(v);
+}
+function clrItem() { ["iN", "iU", "iI", "iM"].forEach(function (k) { $(k).value = ""; }); $("iMsg").textContent = ""; $("iSave").textContent = "儲存單品"; }
+function clrCombo() { ["cN", "cI", "cM"].forEach(function (k) { $(k).value = ""; }); $("cMsg").textContent = ""; $("cSave").textContent = "儲存組合"; renderIng(); }
+$("iClr").onclick = clrItem; $("cClr").onclick = clrCombo;
+$("iSave").onclick = function () {
+  var errs = [], name = $("iN").value.trim(), old = items[name];
+  if (!name) errs.push("請輸入品項名");
+  var unit = $("iU").value.trim() || (old ? old.unit : "個");
+  var ideal = readNum("iI", old ? old.ideal : 10, errs, "理想庫存"), min = readNum("iM", old ? old.min : 3, errs, "最低限");
+  if (!errs.length && ideal < min) errs.push("理想庫存不可小於最低限");
+  if (errs.length) { $("iMsg").textContent = errs.join("\n"); return; }
+  items[name] = { stock: old ? old.stock : 0, unit: unit, ideal: ideal, min: min };
+  clrItem(); saveData(); renderSettings(); toast("已儲存");
+};
+$("cSave").onclick = function () {
+  var errs = [], name = $("cN").value.trim(), ing = {};
+  if (!name) errs.push("請輸入組合名");
+  var ideal = readNum("cI", 5, errs, "理想預留份數"), min = readNum("cM", 3, errs, "最低預留份數");
+  Array.prototype.forEach.call($("ingBox").querySelectorAll("input"), function (el) {
+    var v = el.value.trim();
+    if (v && !POS.test(v)) { errs.push("「" + el.dataset.n + "」用量請輸入數字"); return; }
+    if (v && parseFloat(v) > 0) ing[el.dataset.n] = parseFloat(v);
+  });
+  if (!errs.length && !Object.keys(ing).length) errs.push("至少要有一項用量大於 0");
+  if (!errs.length && ideal < min) errs.push("理想預留份數不可小於最低預留份數");
+  if (errs.length) { $("cMsg").textContent = errs.join("\n"); return; }
+  combos[name] = { ingredients: ing, ideal: ideal, min: min };
+  clrCombo(); saveData(); renderSettings(); toast("已儲存");
+};
+function renderIng() {
+  var b = $("ingBox"); b.innerHTML = "";
+  Object.keys(items).forEach(function (n) {
+    var d = h("div", "row"), l = h("div", "grow", n + "（" + items[n].unit + "）"), i = h("input"); i.type = "text"; i.inputMode = "decimal"; i.value = "0"; i.dataset.n = n; i.style.width = "80px"; i.style.textAlign = "center";
+    d.appendChild(l); d.appendChild(i); b.appendChild(d);
+  });
+  if (!b.firstChild) b.appendChild(h("div", "empty", "請先新增單品"));
+}
+function renderSettings() {
+  var il = $("iList"), cl = $("cList"); il.innerHTML = ""; cl.innerHTML = "";
+  Object.keys(items).forEach(function (n) {
+    var it = items[n], d = h("div", "row click"), l = h("div", "grow"), x = h("button", "x", "✕");
+    l.appendChild(h("b", null, n)); l.appendChild(h("small", "sub", fmt(it.stock) + it.unit + "・理想 " + fmt(it.ideal) + "・最低 " + fmt(it.min)));
+    x.setAttribute("aria-label", "刪除單品");
+    x.onclick = function (ev) {
+      ev.stopPropagation();
+      var used = Object.keys(combos).filter(function (c) { return n in combos[c].ingredients; });
+      if (!confirm("刪除「" + n + "」？" + (used.length ? "\n會從組合「" + used.join("、") + "」移除，原料全空的組合會一併刪除。" : ""))) return;
+      delete items[n];
+      used.forEach(function (c) { delete combos[c].ingredients[n]; if (!Object.keys(combos[c].ingredients).length) delete combos[c]; });
+      saveData(); renderSettings();
+    };
+    d.onclick = function () { $("iN").value = n; $("iU").value = it.unit; $("iI").value = it.ideal; $("iM").value = it.min; $("iMsg").textContent = ""; $("iSave").textContent = "更新單品"; $("iN").scrollIntoView({ block: "center" }); };
+    d.appendChild(l); d.appendChild(x); il.appendChild(d);
+  });
+  Object.keys(combos).forEach(function (c) {
+    var co = combos[c], d = h("div", "row click"), l = h("div", "grow"), x = h("button", "x", "✕");
+    l.appendChild(h("b", null, c));
+    l.appendChild(h("small", "sub", Object.keys(co.ingredients).map(function (g) { return g + "×" + co.ingredients[g]; }).join("、") + "・理想 " + co.ideal + "・最低 " + co.min));
+    x.setAttribute("aria-label", "刪除組合");
+    x.onclick = function (ev) { ev.stopPropagation(); if (!confirm("刪除「" + c + "」？")) return; delete combos[c]; saveData(); renderSettings(); };
+    d.onclick = function () {
+      $("cN").value = c; $("cI").value = co.ideal; $("cM").value = co.min; $("cMsg").textContent = ""; $("cSave").textContent = "更新組合";
+      Array.prototype.forEach.call($("ingBox").querySelectorAll("input"), function (el) { el.value = co.ingredients[el.dataset.n] || 0; });
+      $("cN").scrollIntoView({ block: "center" });
+    };
+    d.appendChild(l); d.appendChild(x); cl.appendChild(d);
+  });
+  renderIng();
+}
+
+// ---- 備份 ----
+$("bkOut").onclick = function () {
+  var t = new Date(), a = document.createElement("a"), json = JSON.stringify({ v: 1, items: items, combos: combos, lists: lists });
+  var fname = "inventory-" + t.getFullYear() + pad(t.getMonth() + 1) + pad(t.getDate()) + ".json";
+  if (window.claude && window.claude.use) {
+    window.claude.use("downloads").then(function (dl) {
+      if (!dl) { toast("此處無法匯出備份"); return; }
+      dl.save({ filename: fname, data: json }).catch(function (e) { if (!e || e.code !== "declined") toast("匯出失敗"); });
+    });
+    return;
+  }
+  a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+  a.download = fname;
+  document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 8000);
+};
+$("bkIn").onclick = function () { $("bkFile").value = ""; $("bkFile").click(); };
+function cleanBackup(d) {
+  var ok = function (v) { return typeof v === "number" && isFinite(v) && v >= 0; }, it = {}, co = {}, ls = [], n, c, g, x, ing, has;
+  if (!d || typeof d !== "object" || !d.items || !d.combos) return null;
+  for (n in d.items) {
+    x = d.items[n];
+    if (!x || typeof x.stock !== "number" || !isFinite(x.stock) || !ok(x.ideal) || !ok(x.min)) return null;
+    it[n] = { stock: x.stock, unit: String(x.unit || "個"), ideal: x.ideal, min: x.min };
+  }
+  for (c in d.combos) {
+    x = d.combos[c];
+    if (!x || !x.ingredients || !ok(x.ideal) || !ok(x.min)) return null;
+    ing = {}; has = false;
+    for (g in x.ingredients) if (it[g] && ok(x.ingredients[g]) && x.ingredients[g] > 0) { ing[g] = x.ingredients[g]; has = true; }
+    if (has) co[c] = { ingredients: ing, ideal: x.ideal, min: x.min };
+  }
+  (Array.isArray(d.lists) ? d.lists : []).forEach(function (l) {
+    if (l && typeof l.text === "string") ls.push({ id: String(l.id || uid()), title: String(l.title || "清單"), text: l.text, done: !!l.done });
+  });
+  return { items: it, combos: co, lists: ls };
+}
+$("bkFile").onchange = function () {
+  var f = this.files && this.files[0]; if (!f) return;
+  var fr = new FileReader();
+  fr.onload = function () {
+    var d = null;
+    try { d = cleanBackup(JSON.parse(fr.result)); } catch (e) {}
+    if (!d) { toast("備份檔格式不正確"); return; }
+    if (!confirm("匯入會覆蓋目前所有資料，確定？")) return;
+    items = d.items; combos = d.combos; lists = d.lists; pending = null;
+    saveData(); badge(); show(3); toast("已匯入備份");
+  };
+  fr.readAsText(f);
+};
+
+// ---- 購物清單 ----
+function parseList(text) {
+  var lines = text.replace(/\uFF1A/g, ":").split(/\r?\n/), map = {}, order = [], errs = [];
+  lines.forEach(function (raw, i) {
+    var line = raw.trim(); if (!line) return;
+    var p = line.lastIndexOf(":"), nm = p < 0 ? "" : line.slice(0, p).trim(), num = p < 0 ? "" : line.slice(p + 1).trim().replace(/,/g, "");
+    if (!nm || !POS.test(num) || parseFloat(num) <= 0) { errs.push("第 " + (i + 1) + " 行格式錯誤（品項:數量），已略過：" + line); return; }
+    if (!items[nm]) { errs.push("第 " + (i + 1) + " 行找不到「" + nm + "」，已略過"); return; }
+    if (!(nm in map)) { map[nm] = 0; order.push(nm); }
+    map[nm] = r2(map[nm] + parseFloat(num));
+  });
+  return { rows: order.map(function (n) { return { name: n, q: map[n] }; }), errs: errs };
+}
+function badge() { var n = lists.filter(function (l) { return !l.done; }).length; $("n4t").textContent = n ? "清單 (" + n + ")" : "清單"; }
+function renderLists() {
+  var box = $("listBox"); box.innerHTML = "";
+  if (!lists.length) box.appendChild(h("div", "empty", "尚無清單"));
+  lists.forEach(function (l) {
+    var c = h("div", "card"), hd = h("div", "hd"), t = h("input", "ttl"), p = h("span", "pill s-" + (l.done ? "ok" : "warn"), l.done ? "已進貨" : "待進貨");
+    t.value = l.title; t.maxLength = 40; t.disabled = l.done;
+    hd.appendChild(t); hd.appendChild(p); c.appendChild(hd);
+    var ta = h("textarea"); ta.value = l.text; ta.readOnly = l.done; ta.placeholder = "雞蛋:10"; ta.style.marginTop = "6px"; c.appendChild(ta);
+    var m = h("div", "msg"); c.appendChild(m);
+    function chk() { var r = parseList(ta.value); m.textContent = r.errs.length ? r.errs.join("\n") : (r.rows.length ? "共 " + r.rows.length + " 項" : ""); m.className = "msg" + (r.errs.length ? " bad" : ""); return r; }
+    ta.oninput = chk; chk();
+    var b = h("div", "btns"), del = h("button", "d", "刪除"); b.appendChild(del);
+    del.onclick = function () { if (!confirm("刪除「" + l.title + "」？")) return; lists = lists.filter(function (k) { return k.id !== l.id; }); if (pending === l.id) pending = null; saveData(); badge(); renderLists(); };
+    if (!l.done) {
+      var sv = h("button", "g", "儲存"), go1 = h("button", null, "進貨入庫");
+      var keep = function () { l.title = t.value.trim() || "清單"; l.text = ta.value; };
+      sv.onclick = function () { keep(); if (saveData()) toast("已儲存"); };
+      go1.onclick = function () {
+        var r = chk(); if (!r.rows.length) { toast("沒有可入庫的品項"); return; }
+        keep(); saveData(); pending = l.id; $("adj").value = r.rows.map(function (x) { return x.name + ":+" + x.q; }).join("\n");
+        go(2); toast("請在調整頁確認");
+      };
+      b.appendChild(sv); b.appendChild(go1);
+    }
+    c.appendChild(b); box.appendChild(c);
+  });
+}
+$("newList").onclick = function () {
+  var t = new Date();
+  lists.unshift({ id: uid(), title: "清單 " + (t.getMonth() + 1) + "/" + t.getDate(), text: "", done: false });
+  saveData(); badge(); renderLists();
+};
+
+// ---- 頁面切換（返回鍵：任何頁籤先回總覽，再離開） ----
+function show(n) {
+  curP = n;
+  for (var i = 1; i <= 4; i++) { $("p" + i).hidden = i !== n; $("n" + i).className = i === n ? "on" : ""; }
+  if (n === 1) renderOverview();
+  if (n === 2) { renderChips(); calcAdj(); }
+  if (n === 3) renderSettings();
+  if (n === 4) renderLists();
+  window.scrollTo(0, 0);
+}
+function go(n) {
+  if (n === curP) return;
+  if (n === 1) { history.back(); setTimeout(function () { if (curP !== 1) show(1); }, 200); return; }
+  if (curP === 1) history.pushState({ p: n }, ""); else history.replaceState({ p: n }, "");
+  show(n);
+}
+window.addEventListener("popstate", function () { show(1); });
+[1, 2, 3, 4].forEach(function (i) { $("n" + i).onclick = function () { go(i); }; });
+badge(); show(1);
+</script>
+</body>
+</html>
